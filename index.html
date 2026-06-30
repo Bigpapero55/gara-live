@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classifica Live Gara</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
+        h1 { text-align: center; color: #333; margin-bottom: 5px; }
+        h3 { text-align: center; color: #666; font-weight: normal; margin-top: 0; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #007BFF; color: white; }
+        tr:nth-child(even) { background-color: #f8f9fa; }
+    </style>
+</head>
+<body>
+
+    <h1>⏱️ CLASSIFICA LIVE GARA</h1>
+    <h3 id="info-gara">Caricamento informazioni gara...</h3>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Pos.</th>
+                <th>Pett.</th>
+                <th>Atleta</th>
+                <th>Cat.</th>
+                <th>Tempo Netto</th>
+            </tr>
+        </thead>
+        <tbody id="tabella-corpi">
+            <tr><td colspan='5' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>
+        </tbody>
+    </table>
+
+    <script>
+        const URL_INFO = "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app/classifica_live/info.json";
+        const URL_ATLETI = "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app/classifica_live/atleti.json";
+
+        async function caricaClassifica() {
+            try {
+                // 1. Legge Info Gara
+                const resInfo = await fetch(URL_INFO);
+                const dataInfo = await resInfo.json();
+                const infoGaraEl = document.getElementById('info-gara');
+                
+                if (dataInfo && dataInfo.nome_gara) {
+                    infoGaraEl.innerHTML = `<b>${dataInfo.nome_gara}</b> - ${dataInfo.data_gara}`;
+                } else {
+                    infoGaraEl.innerHTML = "Gara Live";
+                }
+
+                // 2. Legge Atleti
+                const resAtleti = await fetch(URL_ATLETI);
+                const dataAtleti = await resAtleti.json();
+                
+                const tbody = document.getElementById('tabella-corpi');
+
+                if (!dataAtleti) {
+                    tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>";
+                    return;
+                }
+
+                tbody.innerHTML = ""; 
+
+                // Prende solo i record validi della tabella atleti ordinati per posizione
+                const listaArrivi = Object.values(dataAtleti).sort((a, b) => parseInt(a.posizione) - parseInt(b.posizione));
+
+                listaArrivi.forEach(atleta => {
+                    if(atleta && atleta.posizione) {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td><b>${atleta.posizione}</b></td>
+                            <td>${atleta.pettorale || ""}</td>
+                            <td>${atleta.nome || ""}</td>
+                            <td>${atleta.categoria || ""}</td>
+                            <td><b>${atleta.tempo || ""}</b></td>
+                        `;
+                        tbody.appendChild(row);
+                    }
+                });
+
+            } catch (error) {
+                console.error("Errore nel caricamento dei dati:", error);
+            }
+        }
+
+        setInterval(caricaClassifica, 2000);
+        caricaClassifica();
+    </script>
+</body>
+</html>
