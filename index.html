@@ -50,15 +50,17 @@
     <table>
         <thead>
             <tr>
-                <th>Prog.</th>
+                <th>Pos</th>
+                <th>M/F</th>
+                <th>Cat</th>
                 <th>Pett.</th>
                 <th>Atleta</th>
-                <th>Cat.</th>
+                <th>Categoria</th>
                 <th>Tempo e Media</th>
             </tr>
         </thead>
         <tbody id="tabella-corpi">
-            <tr><td colspan='5' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>
+            <tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>
         </tbody>
     </table>
 
@@ -66,10 +68,8 @@
         const URL_INFO = "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app/classifica_live/info.json";
         const URL_ATLETI = "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app/classifica_live/atleti.json";
 
-        // Percorso attualmente visualizzato (default 1, oppure dal parametro URL)
         let percorsoAttivo = "1";
 
-        // Legge il parametro URL ?percorso=N
         function leggiPercorsoDaURL() {
             const params = new URLSearchParams(window.location.search);
             const p = params.get("percorso");
@@ -77,42 +77,22 @@
             return "1";
         }
 
-        // Cambia percorso, aggiorna URL e ricarica la tabella
         function cambiaPercorso(p) {
             percorsoAttivo = p;
 
-            // Aggiorna URL senza ricaricare la pagina
             const url = new URL(window.location);
             url.searchParams.set("percorso", p);
             window.history.replaceState({}, "", url);
 
-            // Aggiorna tab attivo
             document.querySelectorAll(".tab").forEach(tab => {
                 tab.classList.toggle("active", tab.dataset.percorso === p);
             });
 
-            // Ricarica subito la tabella
             caricaClassifica();
-        }
-
-        // Estrae la posizione assoluta nel percorso dal campo "categoria"
-        // Formato atteso: "X ass. - Y cat - SIGLA"
-        function estraiPosAssoluta(categoria) {
-            if (!categoria) return "";
-            const match = categoria.match(/^(\d+)\s+ass\./);
-            return match ? match[1] : "";
-        }
-
-        // Estrae la sigla categoria dal campo "categoria"
-        function estraiSiglaCat(categoria) {
-            if (!categoria) return "";
-            const match = categoria.match(/-\s*([^-]+)$/);
-            return match ? match[1].trim() : categoria;
         }
 
         async function caricaClassifica() {
             try {
-                // 1. Info gara
                 const resInfo = await fetch(URL_INFO);
                 const dataInfo = await resInfo.json();
                 const infoGaraEl = document.getElementById('info-gara');
@@ -123,27 +103,25 @@
                     infoGaraEl.innerHTML = "Gara Live";
                 }
 
-                // 2. Atleti
                 const resAtleti = await fetch(URL_ATLETI);
                 const dataAtleti = await resAtleti.json();
                 const tbody = document.getElementById('tabella-corpi');
 
                 if (!dataAtleti) {
-                    tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>";
+                    tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>";
                     return;
                 }
 
-                // 3. Filtra per percorso attivo e ordina per posizione assoluta nel percorso
                 const lista = Object.values(dataAtleti)
                     .filter(a => a && String(a.percorso) === percorsoAttivo)
                     .sort((a, b) => {
-                        const pa = parseInt(estraiPosAssoluta(a.categoria)) || 9999;
-                        const pb = parseInt(estraiPosAssoluta(b.categoria)) || 9999;
+                        const pa = parseInt(a.pos_ass) || 9999;
+                        const pb = parseInt(b.pos_ass) || 9999;
                         return pa - pb;
                     });
 
                 if (lista.length === 0) {
-                    tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Nessun arrivo registrato per questo percorso.</td></tr>";
+                    tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato per questo percorso.</td></tr>";
                     return;
                 }
 
@@ -152,10 +130,12 @@
                 lista.forEach(atleta => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td><b>${estraiPosAssoluta(atleta.categoria)}</b></td>
+                        <td><b>${atleta.pos_ass || ""}</b></td>
+                        <td>${atleta.pos_mf || ""}</td>
+                        <td>${atleta.pos_cat || ""}</td>
                         <td>${atleta.pettorale || ""}</td>
                         <td>${atleta.nome || ""}</td>
-                        <td>${estraiSiglaCat(atleta.categoria)}</td>
+                        <td>${atleta.cat_nome || ""}</td>
                         <td><b>${atleta.tempo || ""}</b></td>
                     `;
                     tbody.appendChild(row);
@@ -166,7 +146,6 @@
             }
         }
 
-        // Avvio
         percorsoAttivo = leggiPercorsoDaURL();
         document.querySelectorAll(".tab").forEach(tab => {
             tab.classList.toggle("active", tab.dataset.percorso === percorsoAttivo);
