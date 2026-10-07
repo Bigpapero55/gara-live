@@ -30,10 +30,32 @@
             color: white;
         }
 
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #007BFF; color: white; }
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-top: 20px;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #007BFF;
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            border-bottom: 2px solid #0056b3;
+        }
         tr:nth-child(even) { background-color: #f8f9fa; }
+
+        /* Colore solo per la cella del nome */
+        td.nome-maschio { color: #007BFF; font-weight: bold; }
+        td.nome-femmina { color: #E91E63; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -129,12 +151,19 @@
 
                 lista.forEach(atleta => {
                     const row = document.createElement('tr');
+
+                    // Determina la classe del nome in base al sesso
+                    const sesso = (atleta.sesso || "").toUpperCase();
+                    let classeNome = "";
+                    if (sesso === "M") classeNome = "nome-maschio";
+                    else if (sesso === "F") classeNome = "nome-femmina";
+
                     row.innerHTML = `
                         <td><b>${atleta.pos_ass || ""}</b></td>
                         <td>${atleta.pos_mf || ""}</td>
                         <td>${atleta.pos_cat || ""}</td>
                         <td>${atleta.pettorale || ""}</td>
-                        <td>${atleta.nome || ""}</td>
+                        <td class="${classeNome}">${atleta.nome || ""}</td>
                         <td>${atleta.cat_nome || ""}</td>
                         <td><b>${atleta.tempo || ""}</b></td>
                     `;
