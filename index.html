@@ -8,6 +8,28 @@
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
         h1 { text-align: center; color: #333; margin-bottom: 5px; }
         h3 { text-align: center; color: #666; font-weight: normal; margin-top: 0; margin-bottom: 20px; }
+
+        .tabs {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background: #e0e0e0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+        .tab.active {
+            background: #007BFF;
+            color: white;
+        }
+
         table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #007BFF; color: white; }
@@ -18,14 +40,20 @@
 
     <h1>⏱️ CLASSIFICA LIVE GARA</h1>
     <h3 id="info-gara">Caricamento informazioni gara...</h3>
-    
+
+    <div class="tabs">
+        <button class="tab" data-percorso="1" onclick="cambiaPercorso('1')">Percorso 1</button>
+        <button class="tab" data-percorso="2" onclick="cambiaPercorso('2')">Percorso 2</button>
+        <button class="tab" data-percorso="3" onclick="cambiaPercorso('3')">Percorso 3</button>
+    </div>
+
     <table>
         <thead>
             <tr>
                 <th>Prog.</th>
                 <th>Pett.</th>
                 <th>Atleta</th>
-                <th>Pos e Cat.</th>
+                <th>Cat.</th>
                 <th>Tempo e Media</th>
             </tr>
         </thead>
@@ -38,23 +66,66 @@
         const URL_INFO = "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app/classifica_live/info.json";
         const URL_ATLETI = "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app/classifica_live/atleti.json";
 
+        // Percorso attualmente visualizzato (default 1, oppure dal parametro URL)
+        let percorsoAttivo = "1";
+
+        // Legge il parametro URL ?percorso=N
+        function leggiPercorsoDaURL() {
+            const params = new URLSearchParams(window.location.search);
+            const p = params.get("percorso");
+            if (p === "1" || p === "2" || p === "3") return p;
+            return "1";
+        }
+
+        // Cambia percorso, aggiorna URL e ricarica la tabella
+        function cambiaPercorso(p) {
+            percorsoAttivo = p;
+
+            // Aggiorna URL senza ricaricare la pagina
+            const url = new URL(window.location);
+            url.searchParams.set("percorso", p);
+            window.history.replaceState({}, "", url);
+
+            // Aggiorna tab attivo
+            document.querySelectorAll(".tab").forEach(tab => {
+                tab.classList.toggle("active", tab.dataset.percorso === p);
+            });
+
+            // Ricarica subito la tabella
+            caricaClassifica();
+        }
+
+        // Estrae la posizione assoluta nel percorso dal campo "categoria"
+        // Formato atteso: "X ass. - Y cat - SIGLA"
+        function estraiPosAssoluta(categoria) {
+            if (!categoria) return "";
+            const match = categoria.match(/^(\d+)\s+ass\./);
+            return match ? match[1] : "";
+        }
+
+        // Estrae la sigla categoria dal campo "categoria"
+        function estraiSiglaCat(categoria) {
+            if (!categoria) return "";
+            const match = categoria.match(/-\s*([^-]+)$/);
+            return match ? match[1].trim() : categoria;
+        }
+
         async function caricaClassifica() {
             try {
-                // 1. Legge Info Gara
+                // 1. Info gara
                 const resInfo = await fetch(URL_INFO);
                 const dataInfo = await resInfo.json();
                 const infoGaraEl = document.getElementById('info-gara');
-                
+
                 if (dataInfo && dataInfo.nome_gara) {
                     infoGaraEl.innerHTML = `<b>${dataInfo.nome_gara}</b> - ${dataInfo.data_gara}`;
                 } else {
                     infoGaraEl.innerHTML = "Gara Live";
                 }
 
-                // 2. Legge Atleti
+                // 2. Atleti
                 const resAtleti = await fetch(URL_ATLETI);
                 const dataAtleti = await resAtleti.json();
-                
                 const tbody = document.getElementById('tabella-corpi');
 
                 if (!dataAtleti) {
@@ -62,23 +133,32 @@
                     return;
                 }
 
-                tbody.innerHTML = ""; 
+                // 3. Filtra per percorso attivo e ordina per posizione assoluta nel percorso
+                const lista = Object.values(dataAtleti)
+                    .filter(a => a && String(a.percorso) === percorsoAttivo)
+                    .sort((a, b) => {
+                        const pa = parseInt(estraiPosAssoluta(a.categoria)) || 9999;
+                        const pb = parseInt(estraiPosAssoluta(b.categoria)) || 9999;
+                        return pa - pb;
+                    });
 
-                // Prende solo i record validi della tabella atleti ordinati per posizione
-                const listaArrivi = Object.values(dataAtleti).sort((a, b) => parseInt(a.posizione) - parseInt(b.posizione));
+                if (lista.length === 0) {
+                    tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Nessun arrivo registrato per questo percorso.</td></tr>";
+                    return;
+                }
 
-                listaArrivi.forEach(atleta => {
-                    if(atleta && atleta.posizione) {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td><b>${atleta.posizione}</b></td>
-                            <td>${atleta.pettorale || ""}</td>
-                            <td>${atleta.nome || ""}</td>
-                            <td>${atleta.categoria || ""}</td>
-                            <td><b>${atleta.tempo || ""}</b></td>
-                        `;
-                        tbody.appendChild(row);
-                    }
+                tbody.innerHTML = "";
+
+                lista.forEach(atleta => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><b>${estraiPosAssoluta(atleta.categoria)}</b></td>
+                        <td>${atleta.pettorale || ""}</td>
+                        <td>${atleta.nome || ""}</td>
+                        <td>${estraiSiglaCat(atleta.categoria)}</td>
+                        <td><b>${atleta.tempo || ""}</b></td>
+                    `;
+                    tbody.appendChild(row);
                 });
 
             } catch (error) {
@@ -86,8 +166,13 @@
             }
         }
 
-        setInterval(caricaClassifica, 2000);
+        // Avvio
+        percorsoAttivo = leggiPercorsoDaURL();
+        document.querySelectorAll(".tab").forEach(tab => {
+            tab.classList.toggle("active", tab.dataset.percorso === percorsoAttivo);
+        });
         caricaClassifica();
+        setInterval(caricaClassifica, 2000);
     </script>
 </body>
 </html>
