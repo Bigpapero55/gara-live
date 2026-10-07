@@ -14,6 +14,7 @@
             justify-content: center;
             gap: 10px;
             margin-bottom: 20px;
+            flex-wrap: wrap;
         }
         .tab {
             padding: 10px 20px;
@@ -91,12 +92,21 @@
         const URL_ATLETI = "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app/classifica_live/atleti.json";
 
         let percorsoAttivo = "1";
+        let nomiPercorsi = { "1": "Percorso 1", "2": "Percorso 2", "3": "Percorso 3" };
 
         function leggiPercorsoDaURL() {
             const params = new URLSearchParams(window.location.search);
             const p = params.get("percorso");
             if (p === "1" || p === "2" || p === "3") return p;
             return "1";
+        }
+
+        function aggiornaTab() {
+            document.querySelectorAll(".tab").forEach(tab => {
+                const p = tab.dataset.percorso;
+                tab.textContent = nomiPercorsi[p] || ("Percorso " + p);
+                tab.classList.toggle("active", p === percorsoAttivo);
+            });
         }
 
         function cambiaPercorso(p) {
@@ -106,25 +116,37 @@
             url.searchParams.set("percorso", p);
             window.history.replaceState({}, "", url);
 
-            document.querySelectorAll(".tab").forEach(tab => {
-                tab.classList.toggle("active", tab.dataset.percorso === p);
-            });
-
+            aggiornaTab();
             caricaClassifica();
         }
 
-        async function caricaClassifica() {
+        async function caricaInfo() {
             try {
                 const resInfo = await fetch(URL_INFO);
                 const dataInfo = await resInfo.json();
-                const infoGaraEl = document.getElementById('info-gara');
 
+                const infoGaraEl = document.getElementById('info-gara');
                 if (dataInfo && dataInfo.nome_gara) {
                     infoGaraEl.innerHTML = `<b>${dataInfo.nome_gara}</b> - ${dataInfo.data_gara}`;
                 } else {
                     infoGaraEl.innerHTML = "Gara Live";
                 }
 
+                // Nomi percorsi (se presenti in info.json)
+                if (dataInfo) {
+                    if (dataInfo.percorso_1) nomiPercorsi["1"] = dataInfo.percorso_1;
+                    if (dataInfo.percorso_2) nomiPercorsi["2"] = dataInfo.percorso_2;
+                    if (dataInfo.percorso_3) nomiPercorsi["3"] = dataInfo.percorso_3;
+                }
+                aggiornaTab();
+
+            } catch (error) {
+                console.error("Errore nel caricamento info:", error);
+            }
+        }
+
+        async function caricaClassifica() {
+            try {
                 const resAtleti = await fetch(URL_ATLETI);
                 const dataAtleti = await resAtleti.json();
                 const tbody = document.getElementById('tabella-corpi');
@@ -152,7 +174,6 @@
                 lista.forEach(atleta => {
                     const row = document.createElement('tr');
 
-                    // Determina la classe del nome in base al sesso
                     const sesso = (atleta.sesso || "").toUpperCase();
                     let classeNome = "";
                     if (sesso === "M") classeNome = "nome-maschio";
@@ -175,11 +196,15 @@
             }
         }
 
+        // Avvio
         percorsoAttivo = leggiPercorsoDaURL();
-        document.querySelectorAll(".tab").forEach(tab => {
-            tab.classList.toggle("active", tab.dataset.percorso === percorsoAttivo);
-        });
+        aggiornaTab();
+        caricaInfo();
         caricaClassifica();
+
+        // Aggiorna info ogni 10 secondi (per nomi gara e percorsi)
+        setInterval(caricaInfo, 10000);
+        // Aggiorna classifica ogni 2 secondi
         setInterval(caricaClassifica, 2000);
     </script>
 </body>
