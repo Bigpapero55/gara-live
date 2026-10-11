@@ -9,34 +9,41 @@
         h1 { text-align: center; color: #333; margin-bottom: 5px; }
         h3 { text-align: center; color: #666; font-weight: normal; margin-top: 0; margin-bottom: 20px; }
 
-        .tabs {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
+        .tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
         .tab {
-            padding: 10px 20px;
-            background: #e0e0e0;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            color: #333;
+            padding: 10px 20px; background: #e0e0e0; border: none;
+            border-radius: 6px; cursor: pointer; font-size: 16px;
+            font-weight: bold; color: #333;
         }
-        .tab.active {
-            background: #007BFF;
+        .tab.active { background: #007BFF; color: white; }
+
+        /* Banner connessione */
+        #banner-rete {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            background: #ff9800;
             color: white;
+            text-align: center;
+            padding: 8px;
+            font-weight: bold;
+            z-index: 999;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
+        #banner-rete.visibile { display: block; }
+        body.offline { padding-top: 40px; }
 
         table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #007BFF; color: white; }
+        th { background-color: #007BFF; color: white; position: sticky; top: 0; }
         tr:nth-child(even) { background-color: #f8f9fa; }
+        tbody tr.nuovo { animation: fadeIn 1s; }
+        @keyframes fadeIn { from { background-color: #fff3cd; } to { background-color: transparent; } }
     </style>
 </head>
 <body>
+
+    <div id="banner-rete">⚠️ Riconnessione in corso...</div>
 
     <h1>⏱️ CLASSIFICA LIVE GARA</h1>
     <h3 id="info-gara">Caricamento informazioni gara...</h3>
@@ -65,10 +72,12 @@
     </table>
 
     <script>
-        const URL_INFO  = "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app/classifica_live/info.json";
+        const URL_INFO   = "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app/classifica_live/info.json";
         const URL_ATLETI = "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app/classifica_live/atleti.json";
 
         let percorsoAttivo = "1";
+        let ultimoHashTabella = "";
+        let erroriConsecutivi = 0;
 
         function leggiPercorsoDaURL() {
             const params = new URLSearchParams(window.location.search);
@@ -79,21 +88,43 @@
 
         function cambiaPercorso(p) {
             percorsoAttivo = p;
-
             const url = new URL(window.location);
             url.searchParams.set("percorso", p);
             window.history.replaceState({}, "", url);
-
             document.querySelectorAll(".tab").forEach(tab => {
                 tab.classList.toggle("active", tab.dataset.percorso === p);
             });
-
+            ultimoHashTabella = "";
             caricaClassifica();
+        }
+
+        function mostraBannerRete(visibile) {
+            const banner = document.getElementById("banner-rete");
+            if (visibile) {
+                banner.classList.add("visibile");
+                document.body.classList.add("offline");
+            } else {
+                banner.classList.remove("visibile");
+                document.body.classList.remove("offline");
+            }
+        }
+
+        // Calcola un hash veloce per capire se qualcosa è cambiato
+        function hashLista(lista) {
+            let s = "";
+            for (const a of lista) {
+                s += (a.pettorale || "") + "|" + (a.pos_ass || "") + "|" + (a.tempo || "") + ";";
+            }
+            // Hash semplice (djb2)
+            let h = 5381;
+            for (let i = 0; i < s.length; i++) {
+                h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+            }
+            return String(h);
         }
 
         async function caricaClassifica() {
             try {
-                // Anti-cache: aggiunge un timestamp univoco ad ogni chiamata
                 const bust = "?ts=" + Date.now();
 
                 const [resInfo, resAtleti] = await Promise.all([
@@ -101,8 +132,16 @@
                     fetch(URL_ATLETI + bust, { cache: "no-store" })
                 ]);
 
+                if (!resInfo.ok || !resAtleti.ok) {
+                    throw new Error("HTTP " + resInfo.status + " / " + resAtleti.status);
+                }
+
                 const dataInfo  = await resInfo.json();
                 const dataAtleti = await resAtleti.json();
+
+                // Se siamo arrivati qui, la rete funziona
+                erroriConsecutivi = 0;
+                mostraBannerRete(false);
 
                 const infoGaraEl = document.getElementById('info-gara');
                 if (dataInfo && dataInfo.nome_gara) {
@@ -114,7 +153,10 @@
                 const tbody = document.getElementById('tabella-corpi');
 
                 if (!dataAtleti) {
-                    tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>";
+                    if (ultimoHashTabella !== "vuoto") {
+                        tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>";
+                        ultimoHashTabella = "vuoto";
+                    }
                     return;
                 }
 
@@ -127,33 +169,40 @@
                     });
 
                 if (lista.length === 0) {
-                    tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato per questo percorso.</td></tr>";
+                    if (ultimoHashTabella !== "vuoto-" + percorsoAttivo) {
+                        tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato per questo percorso.</td></tr>";
+                        ultimoHashTabella = "vuoto-" + percorsoAttivo;
+                    }
                     return;
                 }
 
-                // Costruiamo tutto l'HTML in una stringa e assegniamo una sola volta
-                // (più veloce e più sicuro sul mobile rispetto a N appendChild)
+                // Hash: se la lista è identica all'ultima, non tocchiamo il DOM
+                const nuovoHash = percorsoAttivo + "-" + hashLista(lista);
+                if (nuovoHash === ultimoHashTabella) return;
+
                 let html = "";
                 for (const atleta of lista) {
-                    try {
-                        html += `
-                            <tr>
-                                <td><b>${atleta.pos_ass  ?? ""}</b></td>
-                                <td>${atleta.pos_mf    ?? ""}</td>
-                                <td>${atleta.pos_cat   ?? ""}</td>
-                                <td>${atleta.pettorale  ?? ""}</td>
-                                <td>${atleta.nome       ?? ""}</td>
-                                <td>${atleta.cat_nome   ?? ""}</td>
-                                <td><b>${atleta.tempo  ?? ""}</b></td>
-                            </tr>`;
-                    } catch (e) {
-                        console.error("Errore rendering atleta:", atleta, e);
-                    }
+                    html += `
+                        <tr>
+                            <td><b>${atleta.pos_ass  ?? ""}</b></td>
+                            <td>${atleta.pos_mf    ?? ""}</td>
+                            <td>${atleta.pos_cat   ?? ""}</td>
+                            <td>${atleta.pettorale  ?? ""}</td>
+                            <td>${atleta.nome       ?? ""}</td>
+                            <td>${atleta.cat_nome   ?? ""}</td>
+                            <td><b>${atleta.tempo  ?? ""}</b></td>
+                        </tr>`;
                 }
                 tbody.innerHTML = html;
+                ultimoHashTabella = nuovoHash;
 
             } catch (error) {
-                console.error("Errore nel caricamento dei dati:", error);
+                console.error("Errore rete:", error);
+                erroriConsecutivi++;
+                // Mostra il banner dopo 2 errori consecutivi (evita falsi positivi)
+                if (erroriConsecutivi >= 2) {
+                    mostraBannerRete(true);
+                }
             }
         }
 
