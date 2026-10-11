@@ -17,7 +17,6 @@
         }
         .tab.active { background: #007BFF; color: white; }
 
-        /* Banner connessione */
         #banner-rete {
             display: none;
             position: fixed;
@@ -31,14 +30,13 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
         #banner-rete.visibile { display: block; }
+        #banner-rete.ok { background: #4caf50; }
         body.offline { padding-top: 40px; }
 
         table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #007BFF; color: white; position: sticky; top: 0; }
         tr:nth-child(even) { background-color: #f8f9fa; }
-        tbody tr.nuovo { animation: fadeIn 1s; }
-        @keyframes fadeIn { from { background-color: #fff3cd; } to { background-color: transparent; } }
     </style>
 </head>
 <body>
@@ -71,14 +69,31 @@
         </tbody>
     </table>
 
-    <script>
-        const URL_INFO   = "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app/classifica_live/info.json";
-        const URL_ATLETI = "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app/classifica_live/atleti.json";
+    <!-- Firebase SDK (compat, versione stabile) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
+    <script>
+        // ==========================================
+        // CONFIGURAZIONE FIREBASE (solo databaseURL)
+        // ==========================================
+        const firebaseConfig = {
+            databaseURL: "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // ==========================================
+        // STATO LOCALE
+        // ==========================================
         let percorsoAttivo = "1";
         let ultimoHashTabella = "";
-        let erroriConsecutivi = 0;
+        let dataAtletiCache = null;   // ultimo snapshot degli atleti
+        let primaLettura = true;
 
+        // ==========================================
+        // UTILITIES
+        // ==========================================
         function leggiPercorsoDaURL() {
             const params = new URLSearchParams(window.location.search);
             const p = params.get("percorso");
@@ -95,27 +110,14 @@
                 tab.classList.toggle("active", tab.dataset.percorso === p);
             });
             ultimoHashTabella = "";
-            caricaClassifica();
+            if (dataAtletiCache) aggiornaTabella(dataAtletiCache);
         }
 
-        function mostraBannerRete(visibile) {
-            const banner = document.getElementById("banner-rete");
-            if (visibile) {
-                banner.classList.add("visibile");
-                document.body.classList.add("offline");
-            } else {
-                banner.classList.remove("visibile");
-                document.body.classList.remove("offline");
-            }
-        }
-
-        // Calcola un hash veloce per capire se qualcosa è cambiato
         function hashLista(lista) {
             let s = "";
             for (const a of lista) {
                 s += (a.pettorale || "") + "|" + (a.pos_ass || "") + "|" + (a.tempo || "") + ";";
             }
-            // Hash semplice (djb2)
             let h = 5381;
             for (let i = 0; i < s.length; i++) {
                 h = ((h << 5) + h + s.charCodeAt(i)) | 0;
@@ -123,95 +125,135 @@
             return String(h);
         }
 
-        async function caricaClassifica() {
-            try {
-                const bust = "?ts=" + Date.now();
-
-                const [resInfo, resAtleti] = await Promise.all([
-                    fetch(URL_INFO  + bust, { cache: "no-store" }),
-                    fetch(URL_ATLETI + bust, { cache: "no-store" })
-                ]);
-
-                if (!resInfo.ok || !resAtleti.ok) {
-                    throw new Error("HTTP " + resInfo.status + " / " + resAtleti.status);
-                }
-
-                const dataInfo  = await resInfo.json();
-                const dataAtleti = await resAtleti.json();
-
-                // Se siamo arrivati qui, la rete funziona
-                erroriConsecutivi = 0;
-                mostraBannerRete(false);
-
-                const infoGaraEl = document.getElementById('info-gara');
-                if (dataInfo && dataInfo.nome_gara) {
-                    infoGaraEl.innerHTML = `<b>${dataInfo.nome_gara}</b> - ${dataInfo.data_gara}`;
-                } else {
-                    infoGaraEl.innerHTML = "Gara Live";
-                }
-
-                const tbody = document.getElementById('tabella-corpi');
-
-                if (!dataAtleti) {
-                    if (ultimoHashTabella !== "vuoto") {
-                        tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>";
-                        ultimoHashTabella = "vuoto";
-                    }
-                    return;
-                }
-
-                const lista = Object.values(dataAtleti)
-                    .filter(a => a && String(a.percorso) === percorsoAttivo)
-                    .sort((a, b) => {
-                        const pa = parseInt(a.pos_ass) || 9999;
-                        const pb = parseInt(b.pos_ass) || 9999;
-                        return pa - pb;
-                    });
-
-                if (lista.length === 0) {
-                    if (ultimoHashTabella !== "vuoto-" + percorsoAttivo) {
-                        tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato per questo percorso.</td></tr>";
-                        ultimoHashTabella = "vuoto-" + percorsoAttivo;
-                    }
-                    return;
-                }
-
-                // Hash: se la lista è identica all'ultima, non tocchiamo il DOM
-                const nuovoHash = percorsoAttivo + "-" + hashLista(lista);
-                if (nuovoHash === ultimoHashTabella) return;
-
-                let html = "";
-                for (const atleta of lista) {
-                    html += `
-                        <tr>
-                            <td><b>${atleta.pos_ass  ?? ""}</b></td>
-                            <td>${atleta.pos_mf    ?? ""}</td>
-                            <td>${atleta.pos_cat   ?? ""}</td>
-                            <td>${atleta.pettorale  ?? ""}</td>
-                            <td>${atleta.nome       ?? ""}</td>
-                            <td>${atleta.cat_nome   ?? ""}</td>
-                            <td><b>${atleta.tempo  ?? ""}</b></td>
-                        </tr>`;
-                }
-                tbody.innerHTML = html;
-                ultimoHashTabella = nuovoHash;
-
-            } catch (error) {
-                console.error("Errore rete:", error);
-                erroriConsecutivi++;
-                // Mostra il banner dopo 2 errori consecutivi (evita falsi positivi)
-                if (erroriConsecutivi >= 2) {
-                    mostraBannerRete(true);
-                }
+        function mostraBannerRete(stato) {
+            // stato: "ok" | "offline" | "nascosto"
+            const banner = document.getElementById("banner-rete");
+            if (stato === "offline") {
+                banner.textContent = "⚠️ Riconnessione in corso...";
+                banner.classList.add("visibile");
+                banner.classList.remove("ok");
+                document.body.classList.add("offline");
+            } else if (stato === "ok") {
+                banner.textContent = "✅ Connesso";
+                banner.classList.add("visibile", "ok");
+                document.body.classList.add("offline");
+                setTimeout(() => {
+                    banner.classList.remove("visibile", "ok");
+                    document.body.classList.remove("offline");
+                }, 1500);
+            } else {
+                banner.classList.remove("visibile", "ok");
+                document.body.classList.remove("offline");
             }
         }
 
+        // ==========================================
+        // RENDER TABELLA
+        // ==========================================
+        function aggiornaTabella(dataAtleti) {
+            const tbody = document.getElementById('tabella-corpi');
+
+            if (!dataAtleti) {
+                if (ultimoHashTabella !== "vuoto") {
+                    tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>";
+                    ultimoHashTabella = "vuoto";
+                }
+                return;
+            }
+
+            const lista = Object.values(dataAtleti)
+                .filter(a => a && String(a.percorso) === percorsoAttivo)
+                .sort((a, b) => {
+                    const pa = parseInt(a.pos_ass) || 9999;
+                    const pb = parseInt(b.pos_ass) || 9999;
+                    return pa - pb;
+                });
+
+            if (lista.length === 0) {
+                if (ultimoHashTabella !== "vuoto-" + percorsoAttivo) {
+                    tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato per questo percorso.</td></tr>";
+                    ultimoHashTabella = "vuoto-" + percorsoAttivo;
+                }
+                return;
+            }
+
+            // Hash anti-ridisegno
+            const nuovoHash = percorsoAttivo + "-" + hashLista(lista);
+            if (nuovoHash === ultimoHashTabella) return;
+
+            let html = "";
+            for (const atleta of lista) {
+                html += `
+                    <tr>
+                        <td><b>${atleta.pos_ass  ?? ""}</b></td>
+                        <td>${atleta.pos_mf    ?? ""}</td>
+                        <td>${atleta.pos_cat   ?? ""}</td>
+                        <td>${atleta.pettorale  ?? ""}</td>
+                        <td>${atleta.nome       ?? ""}</td>
+                        <td>${atleta.cat_nome   ?? ""}</td>
+                        <td><b>${atleta.tempo  ?? ""}</b></td>
+                    </tr>`;
+            }
+            tbody.innerHTML = html;
+            ultimoHashTabella = nuovoHash;
+        }
+
+        // ==========================================
+        // INFO GARA
+        // ==========================================
+        function aggiornaInfoGara(dataInfo) {
+            const el = document.getElementById('info-gara');
+            if (dataInfo && dataInfo.nome_gara) {
+                el.innerHTML = `<b>${dataInfo.nome_gara}</b> - ${dataInfo.data_gara}`;
+            } else {
+                el.innerHTML = "Gara Live";
+            }
+        }
+
+        // ==========================================
+        // LISTENER FIREBASE (tempo reale)
+        // ==========================================
+        db.ref("classifica_live/atleti").on(
+            "value",
+            (snapshot) => {
+                dataAtletiCache = snapshot.val();
+                aggiornaTabella(dataAtletiCache);
+            },
+            (error) => {
+                console.error("Errore lettura atleti:", error);
+                mostraBannerRete("offline");
+            }
+        );
+
+        db.ref("classifica_live/info").on(
+            "value",
+            (snapshot) => aggiornaInfoGara(snapshot.val()),
+            (error) => console.error("Errore lettura info:", error)
+        );
+
+        // ==========================================
+        // MONITORAGGIO STATO CONNESSIONE
+        // ==========================================
+        db.ref(".info/connected").on("value", (snap) => {
+            const connesso = snap.val() === true;
+            if (primaLettura) {
+                primaLettura = false;
+                if (connesso) return; // nessun banner alla prima connessione
+            }
+            if (connesso) {
+                mostraBannerRete("ok");
+            } else {
+                mostraBannerRete("offline");
+            }
+        });
+
+        // ==========================================
+        // INIZIALIZZAZIONE
+        // ==========================================
         percorsoAttivo = leggiPercorsoDaURL();
         document.querySelectorAll(".tab").forEach(tab => {
             tab.classList.toggle("active", tab.dataset.percorso === percorsoAttivo);
         });
-        caricaClassifica();
-        setInterval(caricaClassifica, 3000);
     </script>
 </body>
 </html>
