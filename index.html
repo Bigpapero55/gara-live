@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Classifica Live Gara</title>
+    <title>Classifica Live Gare</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
         h1 { text-align: center; color: #333; margin-bottom: 5px; }
         h3 { text-align: center; color: #666; font-weight: normal; margin-top: 0; margin-bottom: 20px; }
 
-        .tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
+        .tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
         .tab {
             padding: 10px 20px; background: #e0e0e0; border: none;
             border-radius: 6px; cursor: pointer; font-size: 16px;
@@ -18,16 +18,9 @@
         .tab.active { background: #007BFF; color: white; }
 
         #banner-rete {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            background: #ff9800;
-            color: white;
-            text-align: center;
-            padding: 8px;
-            font-weight: bold;
-            z-index: 999;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            display: none; position: fixed; top: 0; left: 0; right: 0;
+            background: #ff9800; color: white; text-align: center;
+            padding: 8px; font-weight: bold; z-index: 999;
         }
         #banner-rete.visibile { display: block; }
         #banner-rete.ok { background: #4caf50; }
@@ -43,14 +36,11 @@
 
     <div id="banner-rete">⚠️ Riconnessione in corso...</div>
 
-    <h1>⏱️ CLASSIFICA LIVE GARA</h1>
-    <h3 id="info-gara">Caricamento informazioni gara...</h3>
+    <h1>⏱️ CLASSIFICA LIVE GARE</h1>
+    <h3 id="info-gara">Caricamento...</h3>
 
-    <div class="tabs">
-        <button class="tab" data-percorso="1" onclick="cambiaPercorso('1')">Percorso 1</button>
-        <button class="tab" data-percorso="2" onclick="cambiaPercorso('2')">Percorso 2</button>
-        <button class="tab" data-percorso="3" onclick="cambiaPercorso('3')">Percorso 3</button>
-    </div>
+    <div class="tabs" id="tabs-gare"></div>
+    <div class="tabs" id="tabs-percorsi" style="margin-top: -10px;"></div>
 
     <table>
         <thead>
@@ -69,13 +59,12 @@
         </tbody>
     </table>
 
-    <!-- Firebase SDK (compat, versione stabile) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
     <script>
         // ==========================================
-        // CONFIGURAZIONE FIREBASE (solo databaseURL)
+        // CONFIGURAZIONE
         // ==========================================
         const firebaseConfig = {
             databaseURL: "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app"
@@ -84,33 +73,65 @@
         const db = firebase.database();
 
         // ==========================================
-        // STATO LOCALE
+        // STATO
         // ==========================================
+        let garaAttiva = null;
         let percorsoAttivo = "1";
+        let percorsiDisponibili = ["1", "2", "3"];
+        let listaGare = [];          // [{id: "Roma"}, {id: "Milano"}]
+        let infoCache = {};          // { Roma: {...}, Milano: {...} }
+        let atletiCache = {};        // { Roma: {...}, Milano: {...} }
+        let listenerAttivi = {};     // per evitare doppi listener
         let ultimoHashTabella = "";
-        let dataAtletiCache = null;   // ultimo snapshot degli atleti
-        let primaLettura = true;
 
         // ==========================================
         // UTILITIES
         // ==========================================
-        function leggiPercorsoDaURL() {
+        function leggiStatoDaURL() {
             const params = new URLSearchParams(window.location.search);
+            const g = params.get("gara");
             const p = params.get("percorso");
-            if (p === "1" || p === "2" || p === "3") return p;
-            return "1";
+            if (g) garaAttiva = g;
+            if (p) percorsoAttivo = p;
+        }
+
+        function scriviStatoSuURL() {
+            const url = new URL(window.location);
+            if (garaAttiva) url.searchParams.set("gara", garaAttiva);
+            url.searchParams.set("percorso", percorsoAttivo);
+            window.history.replaceState({}, "", url);
+        }
+
+        function cambiaGara(idGara) {
+            garaAttiva = idGara;
+            ultimoHashTabella = "";
+            // Se il percorso attivo non esiste nella nuova gara, torna a "1"
+            const info = infoCache[garaAttiva];
+            if (info) {
+                percorsiDisponibili = calcolaPercorsiDisponibili(info);
+                if (!percorsiDisponibili.includes(percorsoAttivo)) {
+                    percorsoAttivo = percorsiDisponibili[0] || "1";
+                }
+            } else {
+                percorsoAttivo = "1";
+            }
+            scriviStatoSuURL();
+            disegnaTabsGare();
+            disegnaTabsPercorsi();
+            aggiornaIntestazione();
+            aggiornaTabella();
         }
 
         function cambiaPercorso(p) {
             percorsoAttivo = p;
-            const url = new URL(window.location);
-            url.searchParams.set("percorso", p);
-            window.history.replaceState({}, "", url);
-            document.querySelectorAll(".tab").forEach(tab => {
-                tab.classList.toggle("active", tab.dataset.percorso === p);
-            });
+            scriviStatoSuURL();
+            disegnaTabsPercorsi();
             ultimoHashTabella = "";
-            if (dataAtletiCache) aggiornaTabella(dataAtletiCache);
+            aggiornaTabella();
+        }
+
+        function calcolaPercorsiDisponibili(info) {
+            return ["1", "2", "3"];
         }
 
         function hashLista(lista) {
@@ -119,19 +140,15 @@
                 s += (a.pettorale || "") + "|" + (a.pos_ass || "") + "|" + (a.tempo || "") + ";";
             }
             let h = 5381;
-            for (let i = 0; i < s.length; i++) {
-                h = ((h << 5) + h + s.charCodeAt(i)) | 0;
-            }
+            for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
             return String(h);
         }
 
         function mostraBannerRete(stato) {
-            // stato: "ok" | "offline" | "nascosto"
             const banner = document.getElementById("banner-rete");
             if (stato === "offline") {
                 banner.textContent = "⚠️ Riconnessione in corso...";
-                banner.classList.add("visibile");
-                banner.classList.remove("ok");
+                banner.classList.add("visibile"); banner.classList.remove("ok");
                 document.body.classList.add("offline");
             } else if (stato === "ok") {
                 banner.textContent = "✅ Connesso";
@@ -148,50 +165,97 @@
         }
 
         // ==========================================
-        // RENDER TABELLA
+        // DISEGNO TAB
         // ==========================================
-        function aggiornaTabella(dataAtleti) {
+        function disegnaTabsGare() {
+            const cont = document.getElementById("tabs-gare");
+            if (listaGare.length === 0) {
+                cont.innerHTML = "";
+                return;
+            }
+            let html = "";
+            for (const g of listaGare) {
+                const info = infoCache[g.id];
+                const label = (info && info.nome_gara) ? info.nome_gara : g.id;
+                const active = (g.id === garaAttiva) ? " active" : "";
+                html += `<button class="tab${active}" data-gara="${g.id}" onclick="cambiaGara('${g.id}')">${label}</button>`;
+            }
+            cont.innerHTML = html;
+        }
+
+        function disegnaTabsPercorsi() {
+            const cont = document.getElementById("tabs-percorsi");
+            if (!garaAttiva) { cont.innerHTML = ""; return; }
+            const info = infoCache[garaAttiva] || {};
+            let html = "";
+            for (const p of percorsiDisponibili) {
+                const nome = info["percorso_" + p];
+                const label = (nome && String(nome).trim() !== "") ? nome : ("Percorso " + p);
+                const active = (p === percorsoAttivo) ? " active" : "";
+                html += `<button class="tab${active}" data-percorso="${p}" onclick="cambiaPercorso('${p}')">${label}</button>`;
+            }
+            cont.innerHTML = html;
+        }
+
+        // ==========================================
+        // INTESTAZIONE INFO GARA
+        // ==========================================
+        function aggiornaIntestazione() {
+            const el = document.getElementById("info-gara");
+            if (!garaAttiva) { el.textContent = "Nessuna gara attiva"; return; }
+            const info = infoCache[garaAttiva];
+            if (info && info.nome_gara) {
+                el.innerHTML = `<b>${info.nome_gara}</b> - ${info.data_gara || ""}`;
+            } else {
+                el.textContent = garaAttiva;
+            }
+        }
+
+        // ==========================================
+        // TABELLA
+        // ==========================================
+        function aggiornaTabella() {
             const tbody = document.getElementById('tabella-corpi');
+            if (!garaAttiva) {
+                tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessuna gara disponibile.</td></tr>";
+                return;
+            }
+            const dataAtleti = atletiCache[garaAttiva];
 
             if (!dataAtleti) {
-                if (ultimoHashTabella !== "vuoto") {
+                if (ultimoHashTabella !== "vuoto-" + garaAttiva) {
                     tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>";
-                    ultimoHashTabella = "vuoto";
+                    ultimoHashTabella = "vuoto-" + garaAttiva;
                 }
                 return;
             }
 
             const lista = Object.values(dataAtleti)
                 .filter(a => a && String(a.percorso) === percorsoAttivo)
-                .sort((a, b) => {
-                    const pa = parseInt(a.pos_ass) || 9999;
-                    const pb = parseInt(b.pos_ass) || 9999;
-                    return pa - pb;
-                });
+                .sort((a, b) => (parseInt(a.pos_ass) || 9999) - (parseInt(b.pos_ass) || 9999));
 
             if (lista.length === 0) {
-                if (ultimoHashTabella !== "vuoto-" + percorsoAttivo) {
+                if (ultimoHashTabella !== "vuoto-" + garaAttiva + "-" + percorsoAttivo) {
                     tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato per questo percorso.</td></tr>";
-                    ultimoHashTabella = "vuoto-" + percorsoAttivo;
+                    ultimoHashTabella = "vuoto-" + garaAttiva + "-" + percorsoAttivo;
                 }
                 return;
             }
 
-            // Hash anti-ridisegno
-            const nuovoHash = percorsoAttivo + "-" + hashLista(lista);
+            const nuovoHash = garaAttiva + "-" + percorsoAttivo + "-" + hashLista(lista);
             if (nuovoHash === ultimoHashTabella) return;
 
             let html = "";
             for (const atleta of lista) {
                 html += `
                     <tr>
-                        <td><b>${atleta.pos_ass  ?? ""}</b></td>
-                        <td>${atleta.pos_mf    ?? ""}</td>
-                        <td>${atleta.pos_cat   ?? ""}</td>
-                        <td>${atleta.pettorale  ?? ""}</td>
-                        <td>${atleta.nome       ?? ""}</td>
-                        <td>${atleta.cat_nome   ?? ""}</td>
-                        <td><b>${atleta.tempo  ?? ""}</b></td>
+                        <td><b>${atleta.pos_ass ?? ""}</b></td>
+                        <td>${atleta.pos_mf ?? ""}</td>
+                        <td>${atleta.pos_cat ?? ""}</td>
+                        <td>${atleta.pettorale ?? ""}</td>
+                        <td>${atleta.nome ?? ""}</td>
+                        <td>${atleta.cat_nome ?? ""}</td>
+                        <td><b>${atleta.tempo ?? ""}</b></td>
                     </tr>`;
             }
             tbody.innerHTML = html;
@@ -199,73 +263,105 @@
         }
 
         // ==========================================
-        // INFO GARA + NOMI DELLE TAB
+        // LISTENER PER UNA GARA SPECIFICA
         // ==========================================
-        function aggiornaInfoGara(dataInfo) {
-            const el = document.getElementById('info-gara');
-            if (dataInfo && dataInfo.nome_gara) {
-                el.innerHTML = `<b>${dataInfo.nome_gara}</b> - ${dataInfo.data_gara}`;
-            } else {
-                el.innerHTML = "Gara Live";
-            }
+        function ascoltaGara(idGara) {
+            if (listenerAttivi[idGara]) return;
+            listenerAttivi[idGara] = true;
 
-            // Aggiorna i nomi delle tab con i percorsi da Firebase
-            // Se il valore è vuoto o mancante, usa "Percorso N" come fallback
-            if (dataInfo) {
-                document.querySelectorAll(".tab").forEach(tab => {
-                    const n = tab.dataset.percorso;
-                    const nome = dataInfo["percorso_" + n];
-                    tab.textContent = (nome && String(nome).trim() !== "")
-                        ? nome
-                        : "Percorso " + n;
-                });
-            }
+            db.ref("classifica_live/" + idGara + "/info").on("value", (snap) => {
+                infoCache[idGara] = snap.val() || {};
+                if (idGara === garaAttiva) {
+                    disegnaTabsGare();
+                    disegnaTabsPercorsi();
+                    aggiornaIntestazione();
+                } else {
+                    disegnaTabsGare();
+                }
+            });
+
+            db.ref("classifica_live/" + idGara + "/atleti").on("value", (snap) => {
+                atletiCache[idGara] = snap.val();
+                if (idGara === garaAttiva) {
+                    ultimoHashTabella = "";
+                    aggiornaTabella();
+                }
+            });
+        }
+
+        function smettiAscoltoGara(idGara) {
+            if (!listenerAttivi[idGara]) return;
+            db.ref("classifica_live/" + idGara + "/info").off();
+            db.ref("classifica_live/" + idGara + "/atleti").off();
+            delete listenerAttivi[idGara];
+            delete infoCache[idGara];
+            delete atletiCache[idGara];
         }
 
         // ==========================================
-        // LISTENER FIREBASE (tempo reale)
+        // SCOPERTA DINAMICA DELLE GARE
         // ==========================================
-        db.ref("classifica_live/atleti").on(
-            "value",
-            (snapshot) => {
-                dataAtletiCache = snapshot.val();
-                aggiornaTabella(dataAtletiCache);
-            },
-            (error) => {
-                console.error("Errore lettura atleti:", error);
-                mostraBannerRete("offline");
-            }
-        );
+        function aggiornaListaGare() {
+            db.ref("classifica_live").once("value").then((snap) => {
+                const tutte = snap.val() || {};
+                const nuoviId = Object.keys(tutte);
 
-        db.ref("classifica_live/info").on(
-            "value",
-            (snapshot) => aggiornaInfoGara(snapshot.val()),
-            (error) => console.error("Errore lettura info:", error)
-        );
+                // Aggiungi nuove gare
+                for (const id of nuoviId) {
+                    if (!listaGare.some(g => g.id === id)) {
+                        listaGare.push({ id: id });
+                        ascoltaGara(id);
+                    }
+                }
+
+                // Rimuovi gare sparite
+                const idAttuali = nuoviId;
+                for (let i = listaGare.length - 1; i >= 0; i--) {
+                    if (!idAttuali.includes(listaGare[i].id)) {
+                        smettiAscoltoGara(listaGare[i].id);
+                        listaGare.splice(i, 1);
+                    }
+                }
+
+                // Se la gara attiva non esiste più, scegli la prima
+                if (!garaAttiva || !listaGare.some(g => g.id === garaAttiva)) {
+                    garaAttiva = listaGare[0] ? listaGare[0].id : null;
+                }
+
+                disegnaTabsGare();
+                disegnaTabsPercorsi();
+                aggiornaIntestazione();
+                aggiornaTabella();
+            }).catch((err) => {
+                console.error("Errore lettura lista gare:", err);
+            });
+        }
 
         // ==========================================
-        // MONITORAGGIO STATO CONNESSIONE
+        // CONNESSIONE
         // ==========================================
+        let primaLettura = true;
         db.ref(".info/connected").on("value", (snap) => {
             const connesso = snap.val() === true;
             if (primaLettura) {
                 primaLettura = false;
-                if (connesso) return; // nessun banner alla prima connessione
+                if (connesso) return;
             }
-            if (connesso) {
-                mostraBannerRete("ok");
-            } else {
-                mostraBannerRete("offline");
-            }
+            mostraBannerRete(connesso ? "ok" : "offline");
         });
 
         // ==========================================
-        // INIZIALIZZAZIONE
+        // INIT
         // ==========================================
-        percorsoAttivo = leggiPercorsoDaURL();
-        document.querySelectorAll(".tab").forEach(tab => {
-            tab.classList.toggle("active", tab.dataset.percorso === percorsoAttivo);
-        });
+        leggiStatoDaURL();
+        percorsiDisponibili = ["1", "2", "3"];
+        disegnaTabsGare();
+        disegnaTabsPercorsi();
+        aggiornaIntestazione();
+
+        // Scoperta iniziale + aggiornamento periodico (ogni 10s)
+        aggiornaListaGare();
+        setInterval(aggiornaListaGare, 10000);
     </script>
 </body>
 </html>
