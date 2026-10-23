@@ -199,7 +199,7 @@
         }
 
         // ==========================================
-        // INFO GARA
+        // INFO GARA + NOMI DELLE TAB
         // ==========================================
         function aggiornaInfoGara(dataInfo) {
             const el = document.getElementById('info-gara');
@@ -207,6 +207,18 @@
                 el.innerHTML = `<b>${dataInfo.nome_gara}</b> - ${dataInfo.data_gara}`;
             } else {
                 el.innerHTML = "Gara Live";
+            }
+
+            // Aggiorna i nomi delle tab con i percorsi da Firebase
+            // Se il valore è vuoto o mancante, usa "Percorso N" come fallback
+            if (dataInfo) {
+                document.querySelectorAll(".tab").forEach(tab => {
+                    const n = tab.dataset.percorso;
+                    const nome = dataInfo["percorso_" + n];
+                    tab.textContent = (nome && String(nome).trim() !== "")
+                        ? nome
+                        : "Percorso " + n;
+                });
             }
         }
 
