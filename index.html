@@ -26,22 +26,29 @@
         #banner-rete.ok { background: #4caf50; }
         body.offline { padding-top: 40px; }
 
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; }
+        /* table-layout: fixed fa sì che le percentuali vengano rispettate rigorosamente */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); table-layout: fixed; }
+        th, td { padding: 12px 8px; text-align: left; border-bottom: 1px solid #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         th { background-color: #007BFF; color: white; position: sticky; top: 0; }
         tr:nth-child(even) { background-color: #f8f9fa; }
         
-        /* Larghezze fisse per evitare buchi neri */
+        /* Colonne a larghezza fissa (non si allargano mai) */
         th:nth-child(1), td:nth-child(1) { width: 50px; text-align: center; } /* Pos */
         th:nth-child(2), td:nth-child(2) { width: 50px; text-align: center; } /* M/F */
         th:nth-child(3), td:nth-child(3) { width: 50px; text-align: center; } /* Cat */
-        th:nth-child(4), td:nth-child(4) { width: 60px; text-align: center; } /* Pett. */
+        th:nth-child(4), td:nth-child(4) { width: 70px; text-align: center; } /* Pett. */
+        th:nth-child(6), td:nth-child(6) { width: 120px; } /* Categoria */
+        th:nth-child(8), td:nth-child(8) { width: 180px; font-weight: bold; } /* Tempo */
         
-        /* Atleta prende il 30% della tabella, Categoria e Società si stringono a destra */
-        th:nth-child(5), td:nth-child(5) { width: 30%; } 
-        th:nth-child(6), td:nth-child(6) { width: 15%; text-align: right; } /* Categoria */
-        th:nth-child(7), td:nth-child(7) { width: 20%; text-align: right; } /* Società */
-        th:nth-child(8), td:nth-child(8) { width: 180px; text-align: right; font-weight: bold; } /* Tempo */
+        /* Le due colonne lunghe si dividono il restante 50% e 50% */
+        th:nth-child(5), td:nth-child(5) { width: 50%; } /* Atleta */
+        th:nth-child(7), td:nth-child(7) { width: 50%; } /* Società */
+        
+        /* Ottimizzazione per Mobile (permette lo scroll orizzontale se lo schermo è troppo piccolo) */
+        @media (max-width: 768px) {
+            table { display: block; overflow-x: auto; white-space: nowrap; table-layout: auto; }
+            th, td { white-space: normal; }
+        }
     </style>
 </head>
 <body>
