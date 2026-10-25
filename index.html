@@ -50,12 +50,13 @@
                 <th>Cat</th>
                 <th>Pett.</th>
                 <th>Atleta</th>
+                <th>Società</th>
                 <th>Categoria</th>
                 <th>Tempo e Media</th>
             </tr>
         </thead>
         <tbody id="tabella-corpi">
-            <tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>
+            <tr><td colspan='8' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>
         </tbody>
     </table>
 
@@ -78,10 +79,10 @@
         let garaAttiva = null;
         let percorsoAttivo = "1";
         let percorsiDisponibili = ["1", "2", "3"];
-        let listaGare = [];          // [{id: "Roma"}, {id: "Milano"}]
-        let infoCache = {};          // { Roma: {...}, Milano: {...} }
-        let atletiCache = {};        // { Roma: {...}, Milano: {...} }
-        let listenerAttivi = {};     // per evitare doppi listener
+        let listaGare = [];
+        let infoCache = {};
+        let atletiCache = {};
+        let listenerAttivi = {};
         let ultimoHashTabella = "";
 
         // ==========================================
@@ -105,7 +106,6 @@
         function cambiaGara(idGara) {
             garaAttiva = idGara;
             ultimoHashTabella = "";
-            // Se il percorso attivo non esiste nella nuova gara, torna a "1"
             const info = infoCache[garaAttiva];
             if (info) {
                 percorsiDisponibili = calcolaPercorsiDisponibili(info);
@@ -217,14 +217,14 @@
         function aggiornaTabella() {
             const tbody = document.getElementById('tabella-corpi');
             if (!garaAttiva) {
-                tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessuna gara disponibile.</td></tr>";
+                tbody.innerHTML = "<tr><td colspan='8' style='text-align:center;'>Nessuna gara disponibile.</td></tr>";
                 return;
             }
             const dataAtleti = atletiCache[garaAttiva];
 
             if (!dataAtleti) {
                 if (ultimoHashTabella !== "vuoto-" + garaAttiva) {
-                    tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>";
+                    tbody.innerHTML = "<tr><td colspan='8' style='text-align:center;'>Nessun arrivo registrato al momento.</td></tr>";
                     ultimoHashTabella = "vuoto-" + garaAttiva;
                 }
                 return;
@@ -236,7 +236,7 @@
 
             if (lista.length === 0) {
                 if (ultimoHashTabella !== "vuoto-" + garaAttiva + "-" + percorsoAttivo) {
-                    tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Nessun arrivo registrato per questo percorso.</td></tr>";
+                    tbody.innerHTML = "<tr><td colspan='8' style='text-align:center;'>Nessun arrivo registrato per questo percorso.</td></tr>";
                     ultimoHashTabella = "vuoto-" + garaAttiva + "-" + percorsoAttivo;
                 }
                 return;
@@ -254,6 +254,7 @@
                         <td>${atleta.pos_cat ?? ""}</td>
                         <td>${atleta.pettorale ?? ""}</td>
                         <td>${atleta.nome ?? ""}</td>
+                        <td>${atleta.societa ?? ""}</td>
                         <td>${atleta.cat_nome ?? ""}</td>
                         <td><b>${atleta.tempo ?? ""}</b></td>
                     </tr>`;
@@ -306,7 +307,6 @@
                 const tutte = snap.val() || {};
                 const nuoviId = Object.keys(tutte);
 
-                // Aggiungi nuove gare
                 for (const id of nuoviId) {
                     if (!listaGare.some(g => g.id === id)) {
                         listaGare.push({ id: id });
@@ -314,7 +314,6 @@
                     }
                 }
 
-                // Rimuovi gare sparite
                 const idAttuali = nuoviId;
                 for (let i = listaGare.length - 1; i >= 0; i--) {
                     if (!idAttuali.includes(listaGare[i].id)) {
@@ -323,7 +322,6 @@
                     }
                 }
 
-                // Se la gara attiva non esiste più, scegli la prima
                 if (!garaAttiva || !listaGare.some(g => g.id === garaAttiva)) {
                     garaAttiva = listaGare[0] ? listaGare[0].id : null;
                 }
@@ -359,7 +357,6 @@
         disegnaTabsPercorsi();
         aggiornaIntestazione();
 
-        // Scoperta iniziale + aggiornamento periodico (ogni 10s)
         aggiornaListaGare();
         setInterval(aggiornaListaGare, 10000);
     </script>
