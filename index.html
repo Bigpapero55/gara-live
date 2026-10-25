@@ -31,13 +31,17 @@
         th { background-color: #007BFF; color: white; position: sticky; top: 0; }
         tr:nth-child(even) { background-color: #f8f9fa; }
         
-        /* Larghezze fisse per le colonne */
+        /* Larghezze fisse per evitare buchi neri */
         th:nth-child(1), td:nth-child(1) { width: 50px; text-align: center; } /* Pos */
         th:nth-child(2), td:nth-child(2) { width: 50px; text-align: center; } /* M/F */
         th:nth-child(3), td:nth-child(3) { width: 50px; text-align: center; } /* Cat */
         th:nth-child(4), td:nth-child(4) { width: 60px; text-align: center; } /* Pett. */
-        th:nth-child(7), td:nth-child(7) { width: 180px; } /* Società */
-        th:nth-child(8), td:nth-child(8) { width: 180px; font-weight: bold; } /* Tempo */
+        
+        /* Atleta prende il 30% della tabella, Categoria e Società si stringono a destra */
+        th:nth-child(5), td:nth-child(5) { width: 30%; } 
+        th:nth-child(6), td:nth-child(6) { width: 15%; text-align: right; } /* Categoria */
+        th:nth-child(7), td:nth-child(7) { width: 20%; text-align: right; } /* Società */
+        th:nth-child(8), td:nth-child(8) { width: 180px; text-align: right; font-weight: bold; } /* Tempo */
     </style>
 </head>
 <body>
@@ -58,8 +62,8 @@
                 <th>Cat</th>
                 <th>Pett.</th>
                 <th>Atleta</th>
-                <th>Categoria</th> <!-- Qui, subito dopo Atleta -->
-                <th>Società</th>   <!-- Qui, dopo Categoria -->
+                <th>Categoria</th>
+                <th>Società</th>
                 <th>Tempo e Media</th>
             </tr>
         </thead>
@@ -241,8 +245,8 @@
                         <td>${atleta.pos_cat ?? ""}</td>
                         <td>${atleta.pettorale ?? ""}</td>
                         <td>${atleta.nome ?? ""}</td>
-                        <td>${atleta.cat_nome ?? ""}</td> <!-- Categoria -->
-                        <td>${atleta.societa ?? ""}</td>  <!-- Società -->
+                        <td>${atleta.cat_nome ?? ""}</td>
+                        <td>${atleta.societa ?? ""}</td>
                         <td><b>${atleta.tempo ?? ""}</b></td>
                     </tr>`;
             }
