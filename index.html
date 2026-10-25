@@ -31,13 +31,13 @@
         th { background-color: #007BFF; color: white; position: sticky; top: 0; }
         tr:nth-child(even) { background-color: #f8f9fa; }
         
-        /* Impostiamo larghezze per evitare che il browser "allarghi" a caso le colonne */
+        /* Larghezze fisse per le colonne */
         th:nth-child(1), td:nth-child(1) { width: 50px; text-align: center; } /* Pos */
         th:nth-child(2), td:nth-child(2) { width: 50px; text-align: center; } /* M/F */
         th:nth-child(3), td:nth-child(3) { width: 50px; text-align: center; } /* Cat */
         th:nth-child(4), td:nth-child(4) { width: 60px; text-align: center; } /* Pett. */
-        th:nth-child(7), td:nth-child(7) { width: 200px; } /* Categoria (testo) */
-        th:nth-child(8), td:nth-child(8) { width: 180px; font-weight: bold; } /* Tempo e Media */
+        th:nth-child(7), td:nth-child(7) { width: 180px; } /* Società */
+        th:nth-child(8), td:nth-child(8) { width: 180px; font-weight: bold; } /* Tempo */
     </style>
 </head>
 <body>
@@ -58,8 +58,8 @@
                 <th>Cat</th>
                 <th>Pett.</th>
                 <th>Atleta</th>
-                <th>Categoria</th>
-                <th>Società</th>
+                <th>Categoria</th> <!-- Qui, subito dopo Atleta -->
+                <th>Società</th>   <!-- Qui, dopo Categoria -->
                 <th>Tempo e Media</th>
             </tr>
         </thead>
@@ -241,8 +241,8 @@
                         <td>${atleta.pos_cat ?? ""}</td>
                         <td>${atleta.pettorale ?? ""}</td>
                         <td>${atleta.nome ?? ""}</td>
-                        <td>${atleta.cat_nome ?? ""}</td>
-                        <td>${atleta.societa ?? ""}</td>
+                        <td>${atleta.cat_nome ?? ""}</td> <!-- Categoria -->
+                        <td>${atleta.societa ?? ""}</td>  <!-- Società -->
                         <td><b>${atleta.tempo ?? ""}</b></td>
                     </tr>`;
             }
