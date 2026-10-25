@@ -27,9 +27,17 @@
         body.offline { padding-top: 40px; }
 
         table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #007BFF; color: white; position: sticky; top: 0; }
         tr:nth-child(even) { background-color: #f8f9fa; }
+        
+        /* Impostiamo larghezze per evitare che il browser "allarghi" a caso le colonne */
+        th:nth-child(1), td:nth-child(1) { width: 50px; text-align: center; } /* Pos */
+        th:nth-child(2), td:nth-child(2) { width: 50px; text-align: center; } /* M/F */
+        th:nth-child(3), td:nth-child(3) { width: 50px; text-align: center; } /* Cat */
+        th:nth-child(4), td:nth-child(4) { width: 60px; text-align: center; } /* Pett. */
+        th:nth-child(7), td:nth-child(7) { width: 200px; } /* Categoria (testo) */
+        th:nth-child(8), td:nth-child(8) { width: 180px; font-weight: bold; } /* Tempo e Media */
     </style>
 </head>
 <body>
@@ -50,8 +58,8 @@
                 <th>Cat</th>
                 <th>Pett.</th>
                 <th>Atleta</th>
-                <th>Società</th>
                 <th>Categoria</th>
+                <th>Società</th>
                 <th>Tempo e Media</th>
             </tr>
         </thead>
@@ -64,18 +72,12 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
     <script>
-        // ==========================================
-        // CONFIGURAZIONE
-        // ==========================================
         const firebaseConfig = {
             databaseURL: "https://rtt-live-default-rtdb.europe-west1.firebasedatabase.app"
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // ==========================================
-        // STATO
-        // ==========================================
         let garaAttiva = null;
         let percorsoAttivo = "1";
         let percorsiDisponibili = ["1", "2", "3"];
@@ -85,9 +87,6 @@
         let listenerAttivi = {};
         let ultimoHashTabella = "";
 
-        // ==========================================
-        // UTILITIES
-        // ==========================================
         function leggiStatoDaURL() {
             const params = new URLSearchParams(window.location.search);
             const g = params.get("gara");
@@ -164,15 +163,9 @@
             }
         }
 
-        // ==========================================
-        // DISEGNO TAB
-        // ==========================================
         function disegnaTabsGare() {
             const cont = document.getElementById("tabs-gare");
-            if (listaGare.length === 0) {
-                cont.innerHTML = "";
-                return;
-            }
+            if (listaGare.length === 0) { cont.innerHTML = ""; return; }
             let html = "";
             for (const g of listaGare) {
                 const info = infoCache[g.id];
@@ -197,9 +190,6 @@
             cont.innerHTML = html;
         }
 
-        // ==========================================
-        // INTESTAZIONE INFO GARA
-        // ==========================================
         function aggiornaIntestazione() {
             const el = document.getElementById("info-gara");
             if (!garaAttiva) { el.textContent = "Nessuna gara attiva"; return; }
@@ -211,9 +201,6 @@
             }
         }
 
-        // ==========================================
-        // TABELLA
-        // ==========================================
         function aggiornaTabella() {
             const tbody = document.getElementById('tabella-corpi');
             if (!garaAttiva) {
@@ -254,8 +241,8 @@
                         <td>${atleta.pos_cat ?? ""}</td>
                         <td>${atleta.pettorale ?? ""}</td>
                         <td>${atleta.nome ?? ""}</td>
-                        <td>${atleta.societa ?? ""}</td>
                         <td>${atleta.cat_nome ?? ""}</td>
+                        <td>${atleta.societa ?? ""}</td>
                         <td><b>${atleta.tempo ?? ""}</b></td>
                     </tr>`;
             }
@@ -263,9 +250,6 @@
             ultimoHashTabella = nuovoHash;
         }
 
-        // ==========================================
-        // LISTENER PER UNA GARA SPECIFICA
-        // ==========================================
         function ascoltaGara(idGara) {
             if (listenerAttivi[idGara]) return;
             listenerAttivi[idGara] = true;
@@ -299,9 +283,6 @@
             delete atletiCache[idGara];
         }
 
-        // ==========================================
-        // SCOPERTA DINAMICA DELLE GARE
-        // ==========================================
         function aggiornaListaGare() {
             db.ref("classifica_live").once("value").then((snap) => {
                 const tutte = snap.val() || {};
@@ -335,9 +316,6 @@
             });
         }
 
-        // ==========================================
-        // CONNESSIONE
-        // ==========================================
         let primaLettura = true;
         db.ref(".info/connected").on("value", (snap) => {
             const connesso = snap.val() === true;
@@ -348,9 +326,6 @@
             mostraBannerRete(connesso ? "ok" : "offline");
         });
 
-        // ==========================================
-        // INIT
-        // ==========================================
         leggiStatoDaURL();
         percorsiDisponibili = ["1", "2", "3"];
         disegnaTabsGare();
